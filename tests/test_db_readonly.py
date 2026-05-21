@@ -20,7 +20,7 @@ def test_readonly_connection_blocks_writes(readonly_conn):
 
 def test_readonly_connection_allows_select(readonly_conn):
     cur = readonly_conn.cursor()
-    cur.execute("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
+    cur.execute("SELECT name FROM sqlite_schema WHERE type='table' ORDER BY name")
     tables = [row[0] for row in cur.fetchall()]
     assert tables == ["concert", "singer", "singer_in_concert", "stadium"]
 
