@@ -1,3 +1,7 @@
+[build-system]
+requires = ["hatchling >= 1.26"]
+build-backend = "hatchling.build"
+
 [project]
 name = "querysmith"
 version = "0.1.0"
@@ -8,6 +12,9 @@ dependencies = [
     "ruff>=0.15.13",
     "uvicorn>=0.47.0",
 ]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/agent"]
 
 [tool.ruff]
 target-version = "py314"
