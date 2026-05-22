@@ -11,17 +11,17 @@ from pydantic import BaseModel, Field
 
 class Message(BaseModel):
     role: Literal["user", "assistant"]
-    content: str
+    content: str | list[dict]
 
 
 class MessageManager(BaseModel):
     system: str = ""
     messages: list[Message] = Field(default_factory=list)
 
-    def add_user_message(self, content: str) -> None:
+    def add_user_message(self, content: str | list[dict]) -> None:
         self.messages.append(Message(role="user", content=content))
 
-    def add_assistant_message(self, content: str) -> None:
+    def add_assistant_message(self, content: str | list[dict]) -> None:
         self.messages.append(Message(role="assistant", content=content))
 
     def to_anthropic_kwargs(self) -> dict:
