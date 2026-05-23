@@ -22,3 +22,9 @@ def cosine_similarity(a: np.ndarray, b: np.ndarray) -> float:
     if norm_product == 0:
         return 0.0
     return float(a @ b / norm_product)
+
+
+def most_similar(query: str, candidates: list[str]) -> str:
+    query_vec = embed([query])[0]
+    scores = [cosine_similarity(query_vec, vec) for vec in embed(candidates)]
+    return candidates[int(np.argmax(scores))]
