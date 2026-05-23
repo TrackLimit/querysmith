@@ -1,4 +1,7 @@
+import json
 import sys
+from datetime import UTC, datetime
+from pathlib import Path
 from typing import cast
 
 import anthropic
@@ -34,10 +37,10 @@ TABLE_BLURBS = {
 
 def answer_question(question: str, db_path: str) -> str:
     blurb_to_table = {blurb: table for table, blurb in TABLE_BLURBS.items()}
-    blurbs = top_k_similar(question, list(blurb_to_table),k=3)
+    blurbs = top_k_similar(question, list(blurb_to_table), k=3)
     schema_map = read_schema_map(db_path)
     schema = "\n\n".join(schema_map[blurb_to_table[b]] for b in blurbs)
-    blurb_context = "\n".join(blurbs)    
+    blurb_context = "\n".join(blurbs)
 
     system = (
         "You are a text-to-SQL assistant. "
@@ -69,6 +72,8 @@ def answer_question(question: str, db_path: str) -> str:
     # Run the requested tool, feed the result back as a tool_result block.
     query = cast(str, tool_use.input["query"])
     result = execute_sql(query, db_path)
+    if isinstance(result, str):  # an error string, not rows
+        _log_sql_error(question, query, result)
     manager.add_user_message(
         [
             {
@@ -87,6 +92,18 @@ def answer_question(question: str, db_path: str) -> str:
         **manager.to_anthropic_kwargs(),
     )
     return next((b.text for b in final.content if isinstance(b, TextBlock)), "")
+
+
+def _log_sql_error(question: str, sql: str, error: str) -> None:
+    record = {
+        "ts": datetime.now(UTC).isoformat(),
+        "question": question,
+        "sql": sql,
+        "error": error,
+    }
+    Path("logs").mkdir(exist_ok=True)
+    with open("logs/sql_errors.jsonl", "a") as log:
+        log.write(json.dumps(record) + "\n")
 
 
 def main() -> None:
