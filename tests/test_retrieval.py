@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from agent.retrieval import cosine_similarity, most_similar
+from agent.retrieval import cosine_similarity, top_k_similar
 
 
 def test_cosine_similarity_identical_vectors():
@@ -19,9 +19,12 @@ def test_cosine_similarity_zero_vector_returns_zero():
     assert cosine_similarity(np.zeros(3), np.array([1.0, 2.0, 3.0])) == 0.0
 
 
-def test_most_similar_picks_relevant_blurbs():
+def test_top_k_similar_returns_k_ranked():
     blurbs = [
         "singer: recording artists, their country and age.",
         "stadium: concert venues and their seating capacity.",
+        "concert: concert events and their host stadium.",
     ]
-    assert most_similar("How many singers are there?", blurbs) == blurbs[0]
+    result = top_k_similar("How many singers are there?", blurbs, k=2)
+    assert len(result) == 2
+    assert result[0] == blurbs[0]

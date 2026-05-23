@@ -23,6 +23,13 @@ EXECUTE_SQL_TOOL: ToolParam = {
     },
 }
 
+TABLE_BLURBS = {
+    "singer": "singer: recording artists — their country, age, and song release year.",
+    "concert": "concert: concert events — their theme, year, and host stadium.",
+    "stadium": "stadium: venues — their location and seating-capacity statistics.",
+    "singer_in_concert": "singer_in_concert: junction table linking singers to the concerts they performed in.",
+}
+
 
 def answer_question(question: str, db_path: str) -> str:
     schema = read_schema(db_path)

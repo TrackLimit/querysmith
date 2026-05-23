@@ -1,4 +1,4 @@
-"""Embed text and retrieve the most similar candidate for a query."""
+"""Embed text and retrieve the most similar candidates for a query."""
 
 from functools import cache
 
@@ -24,7 +24,8 @@ def cosine_similarity(a: np.ndarray, b: np.ndarray) -> float:
     return float(a @ b / norm_product)
 
 
-def most_similar(query: str, candidates: list[str]) -> str:
+def top_k_similar(query: str, candidates: list[str], k: int) -> list[str]:
     query_vec = embed([query])[0]
     scores = [cosine_similarity(query_vec, vec) for vec in embed(candidates)]
-    return candidates[int(np.argmax(scores))]
+    ranked = sorted(range(len(candidates)), key=lambda i: scores[i], reverse=True)
+    return [candidates[i] for i in ranked[:k]]
