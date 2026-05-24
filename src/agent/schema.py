@@ -1,4 +1,4 @@
-"""Extract a SQLite schema into typed objects and format it for LLM prompts."""
+"""Extract a SQLite schema into typed objects and render it for embedding/prompts."""
 
 import sqlite3
 
@@ -61,6 +61,28 @@ def _read_table(cur: sqlite3.Cursor, name: str) -> Table:
     return Table(
         name=name, columns=columns, primary_key=primary_key, foreign_keys=foreign_keys
     )
+
+
+def render_table(table: Table) -> str:
+    """One self-contained sentence-form description, for embedding."""
+    pk = set(table.primary_key)
+    cols = []
+    for col in table.columns:
+        label = col.type.lower() or "unknown"
+        if col.name in pk:
+            label += ", primary key"
+        cols.append(f"{col.name} ({label})")
+    text = f"Table {table.name}. Columns: {', '.join(cols)}."
+
+    if table.foreign_keys:
+        fks = "; ".join(
+            f"{fk.column} references {fk.ref_table}({fk.ref_column})"
+            for fk in table.foreign_keys
+        )
+        text += f" Foreign keys: {fks}."
+    else:
+        text += " No foreign keys."
+    return text
 
 
 def read_schema_map(db_path: str) -> dict[str, str]:

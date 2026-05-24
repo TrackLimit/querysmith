@@ -2,7 +2,7 @@ import sqlite3
 
 import pytest
 
-from agent.schema import extract_schema
+from agent.schema import extract_schema, render_table
 
 
 @pytest.fixture
@@ -49,3 +49,11 @@ def test_extract_reads_composite_pk_and_fk(tiny_db):
         "artist",
         "artist_id",
     )
+
+
+def test_render_is_readable_sentence_form(tiny_db):
+    album = {t.name: t for t in extract_schema(tiny_db).tables}["album"]
+    text = render_table(album)
+    assert text.startswith("Table album. Columns:")
+    assert "album_id (integer, primary key)" in text
+    assert "artist_id references artist(artist_id)" in text
