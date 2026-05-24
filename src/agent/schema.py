@@ -1,6 +1,66 @@
-"""Format a SQLite schema for inclusion in LLM prompts."""
+"""Extract a SQLite schema into typed objects and format it for LLM prompts."""
 
 import sqlite3
+
+from pydantic import BaseModel
+
+
+class Column(BaseModel):
+    name: str
+    type: str  # declared type, verbatim; may be empty ("INT", "VARCHAR(10)", "")
+
+
+class ForeignKey(BaseModel):
+    column: str
+    ref_table: str
+    ref_column: str
+
+
+class Table(BaseModel):
+    name: str
+    columns: list[Column]
+    primary_key: list[str]  # column names; a list so composite PKs fit
+    foreign_keys: list[ForeignKey]
+
+
+class Schema(BaseModel):
+    tables: list[Table]
+
+
+def extract_schema(db_path: str) -> Schema:
+    """Read every user table's columns, primary key, and foreign keys."""
+    conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT name FROM sqlite_schema "
+            "WHERE type='table' AND name NOT LIKE 'sqlite_%' "
+            "ORDER BY name"
+        )
+        names = [row[0] for row in cur.fetchall()]
+        return Schema(tables=[_read_table(cur, name) for name in names])
+    finally:
+        conn.close()
+
+
+def _read_table(cur: sqlite3.Cursor, name: str) -> Table:
+    cur.execute("SELECT name, type, pk FROM pragma_table_info(?)", (name,))
+    columns: list[Column] = []
+    pk: list[tuple[int, str]] = []
+    for col_name, col_type, pk_pos in cur.fetchall():
+        columns.append(Column(name=col_name, type=col_type))
+        if pk_pos:  # 0 = not part of the PK; 1, 2, ... = position within it
+            pk.append((pk_pos, col_name))
+    primary_key = [col for _, col in sorted(pk)]
+
+    cur.execute('SELECT "from", "table", "to" FROM pragma_foreign_key_list(?)', (name,))
+    foreign_keys = [
+        ForeignKey(column=frm, ref_table=ref_table, ref_column=ref_col)
+        for frm, ref_table, ref_col in cur.fetchall()
+    ]
+    return Table(
+        name=name, columns=columns, primary_key=primary_key, foreign_keys=foreign_keys
+    )
 
 
 def read_schema_map(db_path: str) -> dict[str, str]:
