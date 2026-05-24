@@ -2,8 +2,19 @@
 
 from functools import cache
 
+import chromadb
 import numpy as np
 from fastembed import TextEmbedding
+
+CHROMA_PATH = "chroma_db"
+COLLECTION = "schema"
+
+
+@cache
+def get_client(path: str = CHROMA_PATH):
+    # @cache keeps one client per path, so ingest and retrieve in one process
+    # (e.g. tests) don't trip Chroma's "instance already exists" error.
+    return chromadb.PersistentClient(path=path)
 
 
 @cache
