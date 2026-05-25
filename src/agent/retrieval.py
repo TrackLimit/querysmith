@@ -1,10 +1,12 @@
-"""Embed text and retrieve the most similar candidates for a query."""
+"""Embed text and retrieve the most relevant tables for a question, via Chroma."""
 
 from functools import cache
 
 import chromadb
 import numpy as np
 from fastembed import TextEmbedding
+
+from agent.schema import Table
 
 CHROMA_PATH = "chroma_db"
 COLLECTION = "schema"
@@ -19,7 +21,6 @@ def get_client(path: str = CHROMA_PATH):
 
 @cache
 def _get_model() -> TextEmbedding:
-    # Built on first call, not at import; keeps module imports (and tests) cheap.
     return TextEmbedding(model_name="BAAI/bge-small-en-v1.5")
 
 
@@ -27,16 +28,15 @@ def embed(texts: list[str]) -> list[np.ndarray]:
     return list(_get_model().embed(texts))
 
 
-def cosine_similarity(a: np.ndarray, b: np.ndarray) -> float:
-    """Similarity in [-1, 1]; 1.0 means the vectors point the same way."""
-    norm_product = np.linalg.norm(a) * np.linalg.norm(b)
-    if norm_product == 0:
-        return 0.0
-    return float(a @ b / norm_product)
-
-
-def top_k_similar(query: str, candidates: list[str], k: int) -> list[str]:
-    query_vec = embed([query])[0]
-    scores = [cosine_similarity(query_vec, vec) for vec in embed(candidates)]
-    ranked = sorted(range(len(candidates)), key=lambda i: scores[i], reverse=True)
-    return [candidates[i] for i in ranked[:k]]
+def retrieve(question: str, k: int, *, chroma_path: str = CHROMA_PATH) -> list[Table]:
+    try:
+        collection = get_client(chroma_path).get_collection(COLLECTION)
+    except Exception:
+        raise RuntimeError(
+            "Schema index not found - run `uv run python -m agent.ingest <db_path>` first."
+        ) from None
+    hits = collection.query(
+        query_embeddings=[embed([question])[0].tolist()],
+        n_results=k,
+    )
+    return [Table.model_validate_json(m["schema_json"]) for m in hits["metadatas"][0]]

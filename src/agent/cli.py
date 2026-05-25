@@ -9,7 +9,7 @@ from anthropic.types import TextBlock, ToolParam, ToolUseBlock
 
 from agent.executor import execute_sql
 from agent.messages import MessageManager
-from agent.retrieval import top_k_similar
+from agent.retrieval import retrieve
 from agent.schema import read_schema_map
 
 EXECUTE_SQL_TOOL: ToolParam = {
@@ -27,27 +27,18 @@ EXECUTE_SQL_TOOL: ToolParam = {
     },
 }
 
-TABLE_BLURBS = {
-    "singer": "singer: recording artists — their country, age, and song release year.",
-    "concert": "concert: concert events — their theme, year, and host stadium.",
-    "stadium": "stadium: venues — their location and seating-capacity statistics.",
-    "singer_in_concert": "singer_in_concert: junction table linking singers to the concerts they performed in.",
-}
-
 
 def answer_question(question: str, db_path: str) -> str:
-    blurb_to_table = {blurb: table for table, blurb in TABLE_BLURBS.items()}
-    blurbs = top_k_similar(question, list(blurb_to_table), k=3)
+    tables = retrieve(question, k=3)
     schema_map = read_schema_map(db_path)
-    schema = "\n\n".join(schema_map[blurb_to_table[b]] for b in blurbs)
-    blurb_context = "\n".join(blurbs)
+    schema = "\n\n".join(schema_map[t.name] for t in tables)
 
     system = (
         "You are a text-to-SQL assistant. "
         "Use the execute_sql tool to run a query against the database, "
         "then answer the question from the results. "
         "Use ONLY tables and columns that exist in the schema.\n\n"
-        f"{blurb_context}\n\nSchema:\n{schema}"
+        f"Schema:\n{schema}"
     )
 
     manager = MessageManager(system=system)
