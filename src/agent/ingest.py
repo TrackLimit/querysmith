@@ -5,6 +5,7 @@ import sys
 
 from agent.retrieval import CHROMA_PATH, COLLECTION, embed, get_client
 from agent.schema import extract_schema, render_table
+from agent.values import extract_categorical_values, render_values
 
 
 def ingest_schema(db_path: str, *, chroma_path: str = CHROMA_PATH) -> int:
@@ -12,21 +13,26 @@ def ingest_schema(db_path: str, *, chroma_path: str = CHROMA_PATH) -> int:
     tables = extract_schema(db_path).tables
     if not tables:  # Chroma's add() errors on an empty ids list
         return 0
+    by_name = {t.name: t for t in tables}
+    ids = [t.name for t in tables]
     docs = [render_table(t) for t in tables]
-    vectors = [v.tolist() for v in embed(docs)]
+    metadatas = [{"table": t.name, "schema_json": t.model_dump_json()} for t in tables]
 
+    for key, values in extract_categorical_values(db_path).items():
+        table_name = key.split(".", 1)[0]
+        ids.append(f"values:{key}")
+        docs.append(render_values(key, values))
+        metadatas.append(
+            {"table": table_name, "schema_json": by_name[table_name].model_dump_json()}
+        )
+
+    vectors = [v.tolist() for v in embed(docs)]
     client = get_client(chroma_path)
     with contextlib.suppress(Exception):  # nothing to delete on the first run
         client.delete_collection(COLLECTION)
-    collection = client.create_collection(COLLECTION)
-    collection.add(
-        ids=[t.name for t in tables],
-        embeddings=vectors,
-        documents=docs,
-        metadatas=[
-            {"table": t.name, "schema_json": t.model_dump_json()} for t in tables
-        ],
-    )
+    # cosine matches the bge embeddings; Chroma defaults to L2
+    collection = client.create_collection(COLLECTION, metadata={"hnsw:space": "cosine"})
+    collection.add(ids=ids, embeddings=vectors, documents=docs, metadatas=metadatas)
     return len(tables)
 
 

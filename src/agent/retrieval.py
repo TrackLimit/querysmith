@@ -35,8 +35,15 @@ def retrieve(question: str, k: int, *, chroma_path: str = CHROMA_PATH) -> list[T
         raise RuntimeError(
             "Schema index not found - run `uv run python -m agent.ingest <db_path>` first."
         ) from None
+    # over-fetch, then dedupe: a table can be hit via its description or a value vector
     hits = collection.query(
         query_embeddings=[embed([question])[0].tolist()],
-        n_results=k,
+        n_results=min(k * 4, collection.count()),
     )
-    return [Table.model_validate_json(m["schema_json"]) for m in hits["metadatas"][0]]
+    seen: dict[str, Table] = {}
+    for meta in hits["metadatas"][0]:
+        table = Table.model_validate_json(meta["schema_json"])
+        seen.setdefault(table.name, table)
+        if len(seen) == k:
+            break
+    return list(seen.values())

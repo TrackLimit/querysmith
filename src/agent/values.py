@@ -37,3 +37,7 @@ def extract_categorical_values(
 
 def _is_text(sql_type: str) -> bool:
     return any(hint in sql_type.lower() for hint in _TEXT_HINTS)
+
+
+def render_values(column_key: str, values: list[str]) -> str:
+    return f"{column_key} values: {', '.join(values)}"
