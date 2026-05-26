@@ -97,13 +97,11 @@ def _log_sql_error(question: str, sql: str, error: str) -> None:
 
 
 def main() -> None:
-    if len(sys.argv) < 2:
-        print("Usage: python -m agent.cli '<your question>'")
+    if len(sys.argv) < 3:
+        print("Usage: python -m agent.cli '<question>' <db_path>")
         sys.exit(1)
 
-    question = sys.argv[1]
-    db_path = "sqlite-data/concert_singer/concert_singer.sqlite"
-
+    question, db_path = sys.argv[1], sys.argv[2]
     print(answer_question(question, db_path))
 
 
