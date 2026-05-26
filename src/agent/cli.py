@@ -9,8 +9,8 @@ from anthropic.types import TextBlock, ToolParam, ToolUseBlock
 
 from agent.executor import execute_sql
 from agent.messages import MessageManager
+from agent.prompt import build_schema_prompt
 from agent.retrieval import retrieve
-from agent.schema import read_schema_map
 
 EXECUTE_SQL_TOOL: ToolParam = {
     "name": "execute_sql",
@@ -30,8 +30,7 @@ EXECUTE_SQL_TOOL: ToolParam = {
 
 def answer_question(question: str, db_path: str) -> str:
     tables = retrieve(question, k=3)
-    schema_map = read_schema_map(db_path)
-    schema = "\n\n".join(schema_map[t.name] for t in tables)
+    schema = build_schema_prompt(tables, db_path)
 
     system = (
         "You are a text-to-SQL assistant. "
