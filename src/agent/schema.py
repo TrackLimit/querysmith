@@ -2,7 +2,7 @@
 
 import sqlite3
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class Column(BaseModel):
@@ -21,6 +21,7 @@ class Table(BaseModel):
     columns: list[Column]
     primary_key: list[str]  # column names; a list so composite PKs fit
     foreign_keys: list[ForeignKey]
+    sample_values: dict[str, list[str]] = Field(default_factory=dict)
 
 
 class Schema(BaseModel):

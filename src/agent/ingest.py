@@ -13,12 +13,21 @@ def ingest_schema(db_path: str, *, chroma_path: str = CHROMA_PATH) -> int:
     tables = extract_schema(db_path).tables
     if not tables:  # Chroma's add() errors on an empty ids list
         return 0
+
+    categorical = extract_categorical_values(db_path)
+    for t in tables:
+        t.sample_values = {
+            key.split(".", 1)[1]: values
+            for key, values in categorical.items()
+            if key.startswith(f"{t.name}.")
+        }
+
     by_name = {t.name: t for t in tables}
     ids = [t.name for t in tables]
     docs = [render_table(t) for t in tables]
     metadatas = [{"table": t.name, "schema_json": t.model_dump_json()} for t in tables]
 
-    for key, values in extract_categorical_values(db_path).items():
+    for key, values in categorical.items():
         table_name = key.split(".", 1)[0]
         ids.append(f"values:{key}")
         docs.append(render_values(key, values))
