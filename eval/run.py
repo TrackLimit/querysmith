@@ -1,6 +1,8 @@
-"""Run the eval set: NL-to-SQL, execute against gold, compare. Prints the score."""
+"""Run the eval set: NL-to-SQL, execute against gold, compare. Reports the score
+and fails below the floor."""
 
 import json
+import sys
 import tempfile
 from collections import defaultdict
 from pathlib import Path
@@ -11,6 +13,8 @@ from agent.ingest import ingest_schema
 from eval.compare import order_matters, results_match
 
 CASE_FILES = [Path("eval/spider_cases.jsonl"), Path("eval/adversarial_cases.jsonl")]
+FLOOR = 0.50  # under the ~59% baseline, so run-to-run wobble isn't a red build
+DIFFICULTIES = ["easy", "medium", "hard", "extra"]
 
 
 def _db_path(db_name: str) -> str:
@@ -74,5 +78,34 @@ def report(results: list[dict]) -> None:
     print(f"valid-SQL rate:     {valid / total:.1%} ({valid}/{total})")
 
 
+def markdown_report(results: list[dict]) -> str:
+    lines = [
+        "# Execution-accuracy report",
+        "",
+        "| difficulty | passed | total | accuracy |",
+        "|---|---|---|---|",
+    ]
+    for diff in DIFFICULTIES:
+        bucket = [r for r in results if r["difficulty"] == diff]
+        if bucket:
+            p = sum(r["passed"] for r in bucket)
+            lines.append(f"| {diff} | {p} | {len(bucket)} | {p / len(bucket):.0%} |")
+    total = len(results)
+    passed = sum(r["passed"] for r in results)
+    valid = sum(r["valid"] for r in results)
+    lines += [
+        f"| **all** | **{passed}** | **{total}** | **{passed / total:.1%}** |",
+        "",
+        f"valid-SQL rate: {valid}/{total} ({valid / total:.1%})",
+    ]
+    return "\n".join(lines) + "\n"
+
+
 if __name__ == "__main__":
-    report(run())
+    results = run()
+    report(results)
+    Path("eval/report.md").write_text(markdown_report(results))
+    accuracy = sum(r["passed"] for r in results) / len(results)
+    if accuracy < FLOOR:
+        print(f"\naccuracy {accuracy:.1%} below floor {FLOOR:.0%} — failing")
+        sys.exit(1)
