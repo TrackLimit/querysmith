@@ -7,10 +7,10 @@ from typing import cast
 import anthropic
 from anthropic.types import TextBlock, ToolParam, ToolUseBlock
 
-from agent.executor import execute_sql
+from agent.executor import Error, execute_sql
 from agent.messages import MessageManager
 from agent.prompt import build_schema_prompt
-from agent.retrieval import retrieve
+from agent.retrieval import CHROMA_PATH, retrieve
 
 EXECUTE_SQL_TOOL: ToolParam = {
     "name": "execute_sql",
@@ -27,27 +27,50 @@ EXECUTE_SQL_TOOL: ToolParam = {
     },
 }
 
+MODEL = "claude-sonnet-4-6"
+
+SYSTEM = (
+    "You are a text-to-SQL assistant. "
+    "Use the execute_sql tool to run a query against the database, "
+    "then answer the question from the results. "
+    "Use ONLY tables and columns that exist in the schema.\n\n"
+    "Schema:\n{schema}"
+)
+
+
+def _build_manager(
+    question: str, db_path: str, *, chroma_path: str = CHROMA_PATH
+) -> MessageManager:
+    tables = retrieve(question, k=3, chroma_path=chroma_path)
+    schema = build_schema_prompt(tables, db_path)
+    manager = MessageManager(system=SYSTEM.format(schema=schema))
+    manager.add_user_message(question)
+    return manager
+
+
+def generate_sql(
+    question: str, db_path: str, *, chroma_path: str = CHROMA_PATH
+) -> str | None:
+    """Run the RAG NL-to-SQL step and return the model's query (no execution)."""
+    manager = _build_manager(question, db_path, chroma_path=chroma_path)
+    response = anthropic.Anthropic().messages.create(
+        model=MODEL,
+        max_tokens=2048,
+        tools=[EXECUTE_SQL_TOOL],
+        **manager.to_anthropic_kwargs(),
+    )
+    tool_use = next((b for b in response.content if isinstance(b, ToolUseBlock)), None)
+    return cast(str, tool_use.input["query"]) if tool_use else None
+
 
 def answer_question(question: str, db_path: str) -> str:
-    tables = retrieve(question, k=3)
-    schema = build_schema_prompt(tables, db_path)
-
-    system = (
-        "You are a text-to-SQL assistant. "
-        "Use the execute_sql tool to run a query against the database, "
-        "then answer the question from the results. "
-        "Use ONLY tables and columns that exist in the schema.\n\n"
-        f"Schema:\n{schema}"
-    )
-
-    manager = MessageManager(system=system)
-    manager.add_user_message(question)
+    manager = _build_manager(question, db_path)
 
     client = anthropic.Anthropic()
 
     # First call: the model reasons, then requests the execute_sql tool.
     response = client.messages.create(
-        model="claude-sonnet-4-6",
+        model=MODEL,
         max_tokens=2048,
         tools=[EXECUTE_SQL_TOOL],
         **manager.to_anthropic_kwargs(),
@@ -61,22 +84,25 @@ def answer_question(question: str, db_path: str) -> str:
 
     # Run the requested tool, feed the result back as a tool_result block.
     query = cast(str, tool_use.input["query"])
-    result = execute_sql(query, db_path)
-    if isinstance(result, str):  # an error string, not rows
-        _log_sql_error(question, query, result)
+    result = execute_sql(query, db_path, max_rows=100)
+    if isinstance(result, Error):
+        _log_sql_error(question, query, result.message)
+        content = f"Error: {result.message}"
+    else:
+        content = json.dumps(result.rows, default=str)
     manager.add_user_message(
         [
             {
                 "type": "tool_result",
                 "tool_use_id": tool_use.id,
-                "content": str(result),
+                "content": content,
             }
         ]
     )
 
     # Second call: the model turns the rows into a natural-language answer.
     final = client.messages.create(
-        model="claude-sonnet-4-6",
+        model=MODEL,
         max_tokens=2048,
         tools=[EXECUTE_SQL_TOOL],
         **manager.to_anthropic_kwargs(),

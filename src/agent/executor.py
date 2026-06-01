@@ -1,20 +1,50 @@
-"""Run read-only SQL against a SQLite database."""
+"""Run read-only SQL; return a typed result set or a structured error."""
 
 import sqlite3
+import threading
+from dataclasses import dataclass
 
 
-def execute_sql(sql: str, db_path: str, max_rows: int = 1000) -> list[dict] | str:
-    """Run a query read-only; return rows (capped at max_rows) or the error string."""
-    conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
+@dataclass
+class ResultSet:
+    columns: list[str]
+    rows: list[dict]
+
+
+@dataclass
+class Error:
+    kind: str
+    message: str
+
+
+def execute_sql(
+    sql: str,
+    db_path: str,
+    *,
+    timeout: float = 5.0,
+    max_rows: int | None = None,
+) -> ResultSet | Error:
+    """Run a query read-only; return rows or a structured error."""
+    conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True, check_same_thread=False)
+    timed_out = False
+
+    def fire():
+        nonlocal timed_out
+        timed_out = True
+        conn.interrupt()
+
+    timer = threading.Timer(timeout, fire)
+    timer.start()
     try:
-        cur = conn.cursor()
-        cur.execute(sql)
-        if cur.description is None:  # non-SELECT statements have no result set
-            return []
-        columns = [col[0] for col in cur.description]
-        rows = cur.fetchmany(max_rows)
-        return [dict(zip(columns, row, strict=True)) for row in rows]
+        cur = conn.execute(sql)
+        if cur.description is None:
+            return ResultSet(columns=[], rows=[])
+        columns = [c[0] for c in cur.description]
+        raw = cur.fetchall() if max_rows is None else cur.fetchmany(max_rows)
+        rows = [dict(zip(columns, row, strict=True)) for row in raw]
+        return ResultSet(columns=columns, rows=rows)
     except sqlite3.Error as exc:
-        return f"SQL error: {exc}"
+        return Error(kind="timeout" if timed_out else "sqlite_error", message=str(exc))
     finally:
+        timer.cancel()
         conn.close()
