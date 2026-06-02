@@ -51,11 +51,7 @@ def _build_manager(
     return manager
 
 
-def generate_sql(
-    question: str, db_path: str, *, chroma_path: str = CHROMA_PATH
-) -> str | None:
-    """Run the RAG NL-to-SQL step and return the model's query (no execution)."""
-    manager = _build_manager(question, db_path, chroma_path=chroma_path)
+def ask_for_sql(manager: MessageManager) -> str | None:
     response = anthropic.Anthropic().messages.create(
         model=MODEL,
         max_tokens=2048,
@@ -64,6 +60,13 @@ def generate_sql(
     )
     tool_use = next((b for b in response.content if isinstance(b, ToolUseBlock)), None)
     return cast(str, tool_use.input["query"]) if tool_use else None
+
+
+def generate_sql(
+    question: str, db_path: str, *, chroma_path: str = CHROMA_PATH
+) -> str | None:
+    """Run the RAG NL-to-SQL step and return the model's query (no execution)."""
+    return ask_for_sql(_build_manager(question, db_path, chroma_path=chroma_path))
 
 
 def answer_question(question: str, db_path: str) -> str:
