@@ -13,7 +13,7 @@ from agent.ingest import ingest_schema
 from eval.compare import order_matters, results_match
 
 CASE_FILES = [Path("eval/spider_cases.jsonl"), Path("eval/adversarial_cases.jsonl")]
-FLOOR = 0.50  # under the ~59% baseline, so run-to-run wobble isn't a red build
+FLOOR = 0.70
 DIFFICULTIES = ["easy", "medium", "hard", "extra"]
 
 
