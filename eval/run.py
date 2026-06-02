@@ -7,9 +7,9 @@ import tempfile
 from collections import defaultdict
 from pathlib import Path
 
-from agent.cli import generate_sql
 from agent.executor import Error, execute_sql
 from agent.ingest import ingest_schema
+from agent.loop import solve_sql
 from eval.compare import order_matters, results_match
 
 CASE_FILES = [Path("eval/spider_cases.jsonl"), Path("eval/adversarial_cases.jsonl")]
@@ -37,7 +37,7 @@ def evaluate(case: dict, chroma_path: str) -> dict:
         print(f"WARNING gold failed [{case['db_name']}]: {gold.message}")
         return {**case, "generated_sql": None, "valid": False, "passed": False}
 
-    generated = generate_sql(case["question"], path, chroma_path=chroma_path)
+    generated = solve_sql(case["question"], path, chroma_path=chroma_path)
     if generated is None:
         return {**case, "generated_sql": None, "valid": False, "passed": False}
 
