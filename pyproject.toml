@@ -15,6 +15,7 @@ dependencies = [
     "pydantic>=2.13.4",
     "pytest>=9.0.3",
     "ruff>=0.15.13",
+    "sqlglot>=30.8.0",
     "uvicorn>=0.47.0",
 ]
 
