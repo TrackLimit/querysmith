@@ -7,7 +7,7 @@ from typing import cast
 import anthropic
 from anthropic.types import TextBlock, ToolParam, ToolUseBlock
 
-from agent.executor import Error, execute_sql
+from agent.executor import Error, safe_execute
 from agent.messages import MessageManager
 from agent.prompt import build_schema_prompt
 from agent.retrieval import CHROMA_PATH, retrieve
@@ -90,7 +90,7 @@ def answer_question(question: str, db_path: str) -> str:
 
     # Run the requested tool, feed the result back as a tool_result block.
     query = cast(str, tool_use.input["query"])
-    result = execute_sql(query, db_path, max_rows=100)
+    result = safe_execute(query, db_path)
     if isinstance(result, Error):
         _log_sql_error(question, query, result.message)
         content = f"Error: {result.message}"
